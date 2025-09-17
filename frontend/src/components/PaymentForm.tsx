@@ -264,11 +264,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
 
               if (isCard && isHoliday) {
                 const holidayFee = Math.round(basePrice * 0.10);
-                fees.push(<p key="holiday"><b>Public Holiday Fee (10%):</b> +{holidayFee} $</p>);
+                fees.push(<p key="holiday"><b>Public Holiday charge (10%):</b> +{holidayFee} $</p>);
               }
               else if (isCard) {
-                const cardFee = Math.round(basePrice * 0.05);
-                fees.push(<p key="card"><b>Card Fee (1.5%):</b> +{cardFee} $</p>);
+                const cardFee = Math.round(basePrice * 0.015);
+                fees.push(<p key="card"><b>Card charge (1.5%):</b> +{cardFee} $</p>);
               }
 
 
