@@ -3,6 +3,7 @@ package config
 import (
 	"backend/entity"
 	"fmt"
+	"time"
 )
 
 // SetupData สร้างข้อมูลเริ่มต้นสำหรับ Course, Period, CoursePeriod
@@ -212,4 +213,25 @@ func SeedData() {
 	}
 
 	fmt.Println("✅ SeedData completed successfully")
+}
+
+func SetHoliday() {
+	publicHolidays := []entity.PublicHoliday{
+		{
+			HolidayDate: time.Date(2025, 12, 25, 0, 0, 0, 0, time.UTC), // ตัวอย่างวัน Christmas
+			Name:        "Christmas Day",
+			State:       "NSW",
+		},
+		{
+			HolidayDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), // New Year
+			Name:        "New Year's Day",
+			State:       "NSW",
+		},
+	}
+
+	for _, h := range publicHolidays {
+		DB.FirstOrCreate(&h, entity.PublicHoliday{HolidayDate: h.HolidayDate, State: h.State})
+	}
+
+	fmt.Println("✅ PublicHoliday seed completed successfully")
 }
