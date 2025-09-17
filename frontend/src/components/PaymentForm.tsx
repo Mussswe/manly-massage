@@ -1,11 +1,13 @@
+// src/components/PaymentForm.tsx
 import React, { useEffect, useState } from "react";
 import { Form, Select, InputNumber, Input, Button, Row, Col, Card, message, Divider } from "antd";
-import type { Course, Period, CoursePeriod, Employee, Paymethod, HealthCare, CreatePaymentRequest, Payment } from "../interface/Payment";
-import { getCourses, getPeriods, getCoursePeriods, getEmployees, getPaymethods, getHealthcares, createPayment, updatePayment } from "../services/paymentService";
-import dayjs from "dayjs";
+import type { Course, Period, CoursePeriod, Employee, Paymethod, HealthCare, CreatePaymentRequest, Payment, PublicHoliday } from "../interface/Payment";
+import { getCourses, getPeriods, getCoursePeriods, getEmployees, getPaymethods, getHealthcares, createPayment, updatePayment, getPublicHolidays } from "../services/paymentService";
+import dayjs, { Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import DateTimePicker from "./DateTimePicker";
+import type{ JSX } from "react";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -20,7 +22,7 @@ interface FormState {
   healthcare_id?: number;
   discount: number;
   customer_name: string;
-  start_time?: dayjs.Dayjs | null;
+  start_time?: Dayjs | null;
 }
 
 interface PaymentFormProps {
@@ -37,8 +39,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
   const [healthcares, setHealthcares] = useState<HealthCare[]>([]);
   const [form, setForm] = useState<FormState>({ discount: 0, customer_name: "" });
   const [totalPrice, setTotalPrice] = useState<number>(0);
-  const [extraCharge, setExtraCharge] = useState<number>(0);
+  const [publicHolidays, setPublicHolidays] = useState<Dayjs[]>([]);
 
+  // โหลด master data
   useEffect(() => {
     getCourses().then(setCourses);
     getPeriods().then(setPeriods);
@@ -46,6 +49,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
     getEmployees().then(setEmployees);
     getPaymethods().then(setPaymethods);
     getHealthcares().then(setHealthcares);
+    getPublicHolidays().then(holidays => {
+      const holidayDates = holidays.map(h => dayjs(h.holiday_date));
+      setPublicHolidays(holidayDates);
+    });
   }, []);
 
   // preload ถ้ามี paymentToEdit
@@ -64,34 +71,38 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
     }
   }, [paymentToEdit]);
 
+  // คำนวณบิล realtime ทุกครั้งที่ form หรือ master data เปลี่ยน
   useEffect(() => {
-    const { course_id, period_id, discount, healthcare_id, paymethod_id } = form;
-    if (course_id && period_id) {
-      const cp = coursePeriods.find(c => c.course_id === course_id && c.period_id === period_id);
-      if (cp) {
-        let price = cp.cus_price - discount;
-        if (price < 0) price = 0;
+    const calculate = () => {
+      const selectedCoursePeriod = coursePeriods.find(
+        cp => cp.course_id === form.course_id && cp.period_id === form.period_id
+      );
+      const coursePrice = selectedCoursePeriod?.cus_price || 0;
 
-        const healthcare = healthcares.find(h => h.ID === healthcare_id);
-        let extra = 0;
-        if (healthcare) {
-          extra = healthcare.hicaps - price;
-          if (extra < 0) extra = 0;
+      const selectedHealthcare = healthcares.find(h => h.ID === form.healthcare_id);
+      const hicaps = selectedHealthcare?.hicaps || 0;
+
+      let price = coursePrice - (form.discount || 0);
+      if (selectedHealthcare) price -= hicaps;
+      if (price < 0) price = 0;
+
+      const selectedPaymethod = paymethods.find(p => p.ID === form.paymethod_id);
+
+      // ถ้าเป็น credit card +5%
+      if (selectedPaymethod?.paymethod.toLowerCase().includes("card")) {
+        
+        // ถ้าเป็น public holiday +10%
+        if (form.start_time && publicHolidays.some(h => h.isSame(form.start_time, "day"))) {
+          price = Math.round(price * 1.10);
         }
-
-        const paymethod = paymethods.find(p => p.ID === paymethod_id);
-        if (paymethod && paymethod.paymethod.toLowerCase().includes("card")) {
-          price = Math.round(price * 1.05);
-        }
-
-        setTotalPrice(calculateTotalPrice);
-        setExtraCharge(extra);
+        else{
+        price = Math.round(price * 1.015);}
       }
-    } else {
-      setTotalPrice(0);
-      setExtraCharge(0);
-    }
-  }, [form, coursePeriods, healthcares, paymethods]);
+      setTotalPrice(price);
+    };
+
+    calculate();
+  }, [form, coursePeriods, paymethods, healthcares, publicHolidays]);
 
   const handleChange = <K extends keyof FormState>(key: K, value: any) => {
     if (key === "course_id") {
@@ -106,12 +117,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
   const handleSubmit = async () => {
     const { course_id, period_id, employee_id, paymethod_id, customer_name, discount, healthcare_id, start_time } = form;
     if (!course_id || !period_id || !employee_id || !paymethod_id || !customer_name || !start_time) {
-      console.log("ข้อมูลไม่ครบ", { course_id, period_id, employee_id, paymethod_id, customer_name, start_time });
       message.error("กรุณากรอกข้อมูลให้ครบและเลือกเวลาเริ่มนวด");
       return;
     }
 
-    // คำนวณ start/end เวลา (timezone Australia/Sydney)
     const manlyStart = start_time.tz("Australia/Sydney", false);
     const period = periods.find(p => p.ID === period_id);
     const manlyEnd = period ? manlyStart.add(period.duration, "minute") : null;
@@ -137,8 +146,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
         message.success("บันทึกสำเร็จ!");
       }
       setForm({ discount: 0, customer_name: "" });
-      setTotalPrice(0);
-      setExtraCharge(0);
       if (onSave) onSave();
     } catch (err: any) {
       const errMsg = err.response?.data?.message || err.message || "เกิดข้อผิดพลาด";
@@ -152,7 +159,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
       .map(cp => periods.find(p => p.ID === cp.period_id))
       .filter((p): p is Period => !!p)
     : periods;
-
 
   const StartTimeDisplay = form.start_time
     ? form.start_time.tz("Australia/Sydney", false).format("YYYY-MM-DD HH:mm")
@@ -168,40 +174,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
     }
     return "-";
   })();
+
   const selectedCoursePeriod = coursePeriods.find(
     cp => cp.course_id === form.course_id && cp.period_id === form.period_id
   );
   const coursePrice = selectedCoursePeriod?.cus_price || 0;
-
-  // ดึง HICAPS
   const selectedHealthcare = healthcares.find(h => h.ID === form.healthcare_id);
   const hicaps = selectedHealthcare?.hicaps || 0;
-
-  // คำนวณ total price
-  let priceAfterDiscount = coursePrice - (form.discount || 0);
-  if (selectedHealthcare) priceAfterDiscount -= hicaps;
-  if (priceAfterDiscount < 0) priceAfterDiscount = 0;
-
-  const calculateTotalPrice = () => {
-    const selectedCoursePeriod = coursePeriods.find(
-      cp => cp.course_id === form.course_id && cp.period_id === form.period_id
-    );
-    const coursePrice = selectedCoursePeriod?.cus_price || 0;
-
-    const selectedHealthcare = healthcares.find(h => h.ID === form.healthcare_id);
-    const hicaps = selectedHealthcare?.hicaps || 0;
-
-    let price = coursePrice - (form.discount || 0);
-    if (selectedHealthcare) price -= hicaps;
-    if (price < 0) price = 0;
-
-    const paymethod = paymethods.find(p => p.ID === form.paymethod_id);
-    if (paymethod && paymethod.paymethod.toLowerCase().includes("card")) {
-      price = Math.round(price * 1.015); // บวก 1.5% หลังลด
-    }
-
-    return price;
-  };
 
   return (
     <Card title="บันทึกการจ่ายเงิน" style={{ maxWidth: 700, margin: "20px auto" }}>
@@ -275,21 +254,29 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ onSave, paymentToEdit }) => {
             <p><b>Price:</b> {coursePrice} $</p>
             {selectedHealthcare && <p><b>HaltCare:</b> -{hicaps} $</p>}
             <p><b>Discount:</b> -{form.discount || 0} $</p>
-
             {(() => {
               const paymethod = paymethods.find(p => p.ID === form.paymethod_id);
+              const isCard = paymethod?.paymethod.toLowerCase().includes("card");
+              const isHoliday = form.start_time && publicHolidays.some(h => h.isSame(form.start_time, "day"));
               const basePrice = coursePrice - (form.discount || 0) - (selectedHealthcare?.hicaps || 0);
-              if (paymethod && paymethod.paymethod.toLowerCase().includes("card")) {
-                const cardFee = Math.round(basePrice * 0.05);
-                return <p><b>Card Fee (1.5%):</b> +{cardFee} $</p>;
-              }
-              return null;
-            })()}
 
-            <p><b>Total:</b> {calculateTotalPrice()} $</p>
+              const fees: JSX.Element[] = [];
+
+              if (isCard && isHoliday) {
+                const holidayFee = Math.round(basePrice * 0.10);
+                fees.push(<p key="holiday"><b>Public Holiday Fee (10%):</b> +{holidayFee} $</p>);
+              }
+              else if (isCard) {
+                const cardFee = Math.round(basePrice * 0.05);
+                fees.push(<p key="card"><b>Card Fee (1.5%):</b> +{cardFee} $</p>);
+              }
+
+
+              return fees.length > 0 ? fees : null;
+            })()}
+            <p><b>Total:</b> {totalPrice} $</p>
           </div>
         </Card>
-
 
         <Button type="primary" onClick={handleSubmit} style={{ marginTop: 20, width: "100%" }}>
           บันทึก

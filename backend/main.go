@@ -20,9 +20,10 @@ func main() {
 		&entity.Employee{},
 		&entity.Paymethod{},
 		&entity.HealthCare{},
-		&entity.Payment{}, // <--- ต้องมีตัวนี้
+		&entity.Payment{},
+		&entity.PublicHoliday{}, // <--- ต้องมีตัวนี้
 	)
-
+	config.SetHoliday()
 	//config.SetupData()
 	//config.SeedData()
 	fmt.Println("✅ Database setup completed")

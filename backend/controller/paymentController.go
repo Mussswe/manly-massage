@@ -271,3 +271,11 @@ func UpdatePayment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": payment})
 }
+func GetPublicHolidays(c *gin.Context) {
+	var holidays []entity.PublicHoliday
+	if err := config.DB.Find(&holidays).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": holidays})
+}
