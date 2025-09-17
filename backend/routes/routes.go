@@ -36,4 +36,6 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/employees", controller.GetEmployees)
 	api.GET("/paymethods", controller.GetPaymethods)
 	api.GET("/healthcares", controller.GetHealthcares)
+
+	api.GET("/holidays", controller.GetPublicHolidays)
 }
