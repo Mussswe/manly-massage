@@ -99,3 +99,10 @@ export interface Payment {
   start_time?: string;
   end_time?: string;
 }
+
+export interface PublicHoliday{
+  ID:number;
+  holiday_date: string;
+  name:string;
+  state: string;
+}

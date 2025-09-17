@@ -1,6 +1,6 @@
 // src/services/paymentService.ts
 import axios from "axios";
-import type { Course, Period, CoursePeriod, Employee, Payment, Paymethod, HealthCare, PaymentInfo, CreatePaymentRequest } from "../interface/Payment";
+import type { Course, Period, CoursePeriod, Employee, Payment, Paymethod, HealthCare, PaymentInfo, CreatePaymentRequest ,PublicHoliday} from "../interface/Payment";
 
 const API_URL = "http://localhost:8080/api";
 
@@ -51,5 +51,9 @@ export const getPayments = async (): Promise<Payment[]> => {
 };
 export const updatePayment = async (id: number, payment: CreatePaymentRequest): Promise<Payment> => {
   const res = await axios.put<{ data: Payment }>(`${API_URL}/payments/${id}`, payment);
+  return res.data.data;
+};
+export const getPublicHolidays = async (): Promise<PublicHoliday[]> => {
+  const res = await axios.get<{ data: PublicHoliday[] }>(`${API_URL}/holidays`);
   return res.data.data;
 };
